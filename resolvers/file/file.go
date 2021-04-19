@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"io/ioutil"
 )
 
@@ -10,6 +11,6 @@ func (f FileResolver) Scheme() string {
 	return "file"
 }
 
-func (f FileResolver) Resolve(path string) ([]byte, error) {
+func (f FileResolver) Resolve(ctx context.Context, path string) ([]byte, error) {
 	return ioutil.ReadFile(path)
 }

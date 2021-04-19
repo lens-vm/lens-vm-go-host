@@ -53,7 +53,8 @@ type VM struct {
 	wstore  *wasmer.Store
 
 	resolvers map[string]resolvers.Resolver
-	dgraph    dependancyGraph
+
+	dgraph dependancyGraph
 }
 
 func NewVM(opt *Options) *VM {
@@ -63,8 +64,11 @@ func NewVM(opt *Options) *VM {
 	wengine := wasmer.NewEngine()
 	wstore := wasmer.NewStore(wengine)
 	vm := &VM{
-		wengine: wengine,
-		wstore:  wstore,
+		wengine:       wengine,
+		wstore:        wstore,
+		moduleImports: make(map[string]*Module),
+		lensImports:   make(map[string]*Module),
+		resolvers:     make(map[string]resolvers.Resolver),
 	}
 
 	vm.initResolvers(opt.Resolvers)
@@ -99,13 +103,17 @@ func (vm *VM) Load(l LensLoader) error {
 // Init initializes the virtual machine, assuming it as a loaded
 // lens file object. It creates the underlying WASM module
 // instances, and dynamically links all dependancies
-func (vm *VM) Init() error
+func (vm *VM) Init() error {
+	return nil
+}
 
 // Exec does the actual lens execution and transformation
 // of the input, producing some output. It will execute all
 // the lenses in the LensFile, incrementally merging the
 // individual outputs, until it completes all lenses.
-func (vm *VM) Exec(input []byte) (out []byte, err error)
+func (vm *VM) Exec(input []byte) (out []byte, err error) {
+	return
+}
 
 func (vm *VM) resolveLens(lens types.LensFile) error {
 	foundModules := make(map[string]bool)
@@ -136,7 +144,9 @@ vm.AddModule(lensvm.ModuleIPFSLoader("ipfs://"))
 // ImportModule will add the module file found
 // when resolving the given path. It then adds all the
 // defined lens modules in the module file.
-func (vm *VM) ImportModule(path string) error
+func (vm *VM) ImportModule(path string) error {
+	return nil
+}
 
 // ImportModuleFunction will resolve the module from the
 // given path, and will import only the named module.
@@ -145,7 +155,12 @@ func (vm *VM) ImportModule(path string) error
 // the module only defines a single module definition, it
 // will import it if theres a name match.
 func (vm *VM) ImportModuleFunction(name, path string) error {
-	return nil
+	rmod, err := vm.ResolveModule(path)
+	if err != nil {
+		return err
+	}
+
+	return vm.addModuleImportReference(name, rmod)
 }
 
 func (vm *VM) addModuleImportReference(name string, rmod types.ResolvedModule) error {
@@ -175,9 +190,9 @@ func (vm *VM) addModuleImportReference(name string, rmod types.ResolvedModule) e
 
 // func (vm *VM) HasImport
 
-func (vm *VM) AddResolvedModule(rmod types.ResolvedModule) error {
+// func (vm *VM) AddResolvedModule(rmod types.ResolvedModule) error {
 
-}
+// }
 
 func (vm *VM) newModule(rmod types.ResolvedModule) (*Module, error) {
 	// check ID and PackageBytes

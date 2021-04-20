@@ -1,6 +1,7 @@
 package lensvm
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -31,7 +32,17 @@ type Module struct {
 }
 
 type Options struct {
-	Resolvers []resolvers.Resolver
+	Resolvers     []resolvers.Resolver
+	ContextValues ContextValueOptions
+}
+
+// ContextValueOptions is an option struct
+// to use when creating a VM instance.
+// It sets the default values to the respective
+// internal contexts of the VM.
+type ContextValueOptions struct {
+	Resolver  map[interface{}]interface{}
+	Execution map[interface{}]interface{}
 }
 
 // VM is the runtime virtual machine for
@@ -45,7 +56,7 @@ type VM struct {
 	moduleImports map[string]*Module
 
 	// lensImports is a map of lensName -> Module
-	// where lensName is the name of a importen
+	// where lensName is the name of a imported
 	// lens function from a module
 	lensImports map[string]*Module
 
@@ -54,7 +65,12 @@ type VM struct {
 
 	resolvers map[string]resolvers.Resolver
 
+	resolverCtx context.Context
+	execCtx     context.Context
+
 	dgraph dependancyGraph
+
+	initialized bool
 }
 
 func NewVM(opt *Options) *VM {
@@ -91,13 +107,14 @@ func (vm *VM) initResolvers(res []resolvers.Resolver) {
 	}
 }
 
-func (vm *VM) Load(l LensLoader) error {
-	lens, err := l.Load()
+func (vm *VM) LoadLens(l LensLoader) error {
+	ctx := context.TODO()
+	lens, err := l.Load(ctx)
 	if err != nil {
 		return err
 	}
 	vm.lensFile = lens
-	return vm.resolveLens(vm.lensFile)
+	return vm.resolveLens(ctx, vm.lensFile)
 }
 
 // Init initializes the virtual machine, assuming it as a loaded
@@ -115,10 +132,12 @@ func (vm *VM) Exec(input []byte) (out []byte, err error) {
 	return
 }
 
-func (vm *VM) resolveLens(lens types.LensFile) error {
+// func (vm *VM) ResolverContext()
+
+func (vm *VM) resolveLens(ctx context.Context, lens types.LensFile) error {
 	foundModules := make(map[string]bool)
 	for name, modPath := range lens.Import {
-		resolvedMod, err, ok := vm.resolveModule(foundModules, modPath)
+		resolvedMod, err, ok := vm.resolveModule(ctx, foundModules, modPath)
 		if err != nil {
 			return err
 		}
@@ -162,6 +181,8 @@ func (vm *VM) ImportModuleFunction(name, path string) error {
 
 	return vm.addModuleImportReference(name, rmod)
 }
+
+// func (vm) ResolveContext()
 
 func (vm *VM) addModuleImportReference(name string, rmod types.ResolvedModule) error {
 	if len(name) == 0 {
@@ -218,7 +239,8 @@ func (vm *VM) ResolveModule(path string) (types.ResolvedModule, error) {
 	for k, _ := range vm.moduleImports {
 		foundModules[k] = true
 	}
-	mod, err, _ := vm.resolveModule(foundModules, path)
+	ctx := context.TODO()
+	mod, err, _ := vm.resolveModule(ctx, foundModules, path)
 	return mod, err
 }
 
@@ -226,7 +248,7 @@ func (vm *VM) ResolveModule(path string) (types.ResolvedModule, error) {
 // and returns the module along with its imports resolved.
 // If it imports an already resolved module, that import will
 // contain an empty ResolvedModule type.
-func (vm *VM) resolveModule(foundModules map[string]bool, path string) (types.ResolvedModule, error, bool) {
+func (vm *VM) resolveModule(ctx context.Context, foundModules map[string]bool, path string) (types.ResolvedModule, error, bool) {
 	if foundModules == nil {
 		foundModules = make(map[string]bool)
 	}
@@ -235,7 +257,7 @@ func (vm *VM) resolveModule(foundModules map[string]bool, path string) (types.Re
 	}
 	foundModules[path] = true
 
-	buf, err := vm.resolve(path)
+	buf, err := vm.resolve(ctx, path)
 	if err != nil {
 		return types.ResolvedModule{}, err, false
 	}
@@ -263,7 +285,7 @@ func (vm *VM) resolveModule(foundModules map[string]bool, path string) (types.Re
 		m := types.ModuleToResolvedModule(f)
 		for n, p := range f.Import {
 			// impModule := types.ImportedModule{Path: p}
-			mod, err, _ := vm.resolveModule(foundModules, p)
+			mod, err, _ := vm.resolveModule(ctx, foundModules, p)
 			if err != nil {
 				return types.ResolvedModule{}, err, false
 			}
@@ -273,12 +295,12 @@ func (vm *VM) resolveModule(foundModules map[string]bool, path string) (types.Re
 			}
 		}
 
-		wasmBytes, err := vm.resolve(f.Package)
+		wasmBytes, err := vm.resolve(ctx, f.Package)
 		if err != nil {
 			return types.ResolvedModule{}, err, false
 		}
 		m.PackageBytes = wasmBytes
-		m.ID = hash256(m.PackageBytes)
+		m.ID = path
 
 		rMods = append(rMods, m)
 	}
@@ -289,12 +311,13 @@ func (vm *VM) resolveModule(foundModules map[string]bool, path string) (types.Re
 	if len(rMods) == 1 {
 		return rMods[0], nil, true
 	}
+	// @todo: Should we add the extra resolver meta-data here?
 	return types.ResolvedModule{
 		Modules: rMods,
 	}, nil, true
 }
 
-func (vm *VM) resolve(path string) ([]byte, error) {
+func (vm *VM) resolve(ctx context.Context, path string) ([]byte, error) {
 	if !strings.Contains(path, "://") {
 		return nil, errors.New("resolve path is missing a URI scheme")
 	}
@@ -308,7 +331,7 @@ func (vm *VM) resolve(path string) ([]byte, error) {
 		return nil, fmt.Errorf("No resolver for given scheme %s", parts[0])
 	}
 
-	return resolver.Resolve(parts[1])
+	return resolver.Resolve(ctx, parts[1])
 }
 
 func hash256(buf []byte) string {
@@ -333,4 +356,8 @@ func moduleHasLensFunc(rmod types.ResolvedModule, name string) bool {
 	}
 
 	return false
+}
+
+func isEmptyResolvedModule(mod types.ResolvedModule) bool {
+	return (mod.Name == "" && len(mod.Modules) == 0)
 }

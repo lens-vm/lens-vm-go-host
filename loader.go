@@ -1,6 +1,7 @@
 package lensvm
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -9,12 +10,12 @@ import (
 )
 
 type LensLoader interface {
-	Load() (types.LensFile, error)
+	Load(context.Context) (types.LensFile, error)
 	Path() string
 }
 
 type ModuleLoader interface {
-	Load() (types.ModuleFile, error)
+	Load(context.Context) (types.ModuleFile, error)
 	Path() string
 }
 
@@ -27,11 +28,11 @@ func (l genericLoader) Path() string {
 	return l.path
 }
 
-func (l genericLoader) resolve() ([]byte, error) {
+func (l genericLoader) resolve(ctx context.Context) ([]byte, error) {
 	if l.path == "" {
 		return nil, errors.New("LensLoader path is empty")
 	}
-	return l.resolver.Resolve(l.path)
+	return l.resolver.Resolve(ctx, l.path)
 }
 
 type lensFileLoader struct {
@@ -46,9 +47,9 @@ func LensFileLoader(path string) LensLoader {
 	}
 }
 
-func (l lensFileLoader) Load() (types.LensFile, error) {
+func (l lensFileLoader) Load(ctx context.Context) (types.LensFile, error) {
 	var lf types.LensFile
-	buf, err := l.resolve()
+	buf, err := l.resolve(ctx)
 	if err != nil {
 		return lf, err
 	}
@@ -69,9 +70,9 @@ func ModuleFileLoader(path string) ModuleLoader {
 	}
 }
 
-func (l moduleFileLoader) Load() (types.ModuleFile, error) {
+func (l moduleFileLoader) Load(ctx context.Context) (types.ModuleFile, error) {
 	var mf types.ModuleFile
-	buf, err := l.resolve()
+	buf, err := l.resolve(ctx)
 	if err != nil {
 		return mf, err
 	}

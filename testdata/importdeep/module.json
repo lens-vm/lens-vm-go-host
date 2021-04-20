@@ -1,0 +1,27 @@
+{
+    "name": "copy",
+    "description": "Copy the value of a field from source to destination",
+
+    "import": {
+        "rename": "file://testdata/simple/module.json",
+        "extract": "file://testdata/importsimple/module.json"
+    },
+    
+    "arguments": {
+        "type": "object",
+        "properties": {
+            "source": {
+                "description": "The source field for renaming",
+                "type": "string"
+            },
+            "destination": {
+                "description": "The source field for renaming",
+                "type": "string"
+            }
+        }
+    },
+    
+    "runtime": "wasm",
+    "language": "go",
+    "module": "file://testdata/simple/main.wasm"
+}

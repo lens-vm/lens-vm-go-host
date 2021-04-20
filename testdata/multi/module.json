@@ -1,0 +1,48 @@
+{
+    "description": "Collection of lens functions made by Source Inc for testing ONLY.",
+    "runtime": "wasm",
+    "language": "go",
+
+    "modules": [
+        {
+            "name": "rename1",
+            "description": "Rename a field from source to destination",
+            
+            "arguments": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "description": "The source field for renaming",
+                        "type": "string"
+                    },
+                    "destination": {
+                        "description": "The destination field for renaming",
+                        "type": "string"
+                    }
+                }
+            },
+            
+            "module": "file://testdata/multi/main1.wasm"
+        },
+        {
+            "name": "rename2",
+            "description": "Rename a field from source to destination - second implementation",
+            
+            "arguments": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "description": "The source field for renaming",
+                        "type": "string"
+                    },
+                    "destination": {
+                        "description": "The destination field for renaming",
+                        "type": "string"
+                    }
+                }
+            },
+            
+            "module": "file://testdata/multi/main2.wasm"
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    "name": "extract",
+    "description": "extract a field from source",
+
+    "import": {
+        "rename": "file://testdata/simple/module.json"
+    },
+    
+    "arguments": {
+        "type": "object",
+        "properties": {
+            "source": {
+                "description": "The source field for renaming",
+                "type": "string"
+            }
+        }
+    },
+    
+    "runtime": "wasm",
+    "language": "go",
+    "module": "file://testdata/simple/main.wasm"
+}

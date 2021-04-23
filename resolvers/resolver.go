@@ -18,3 +18,4 @@ type Resolver interface {
 // * HTTP Get - http://
 // * IPFS - ipfs://
 // * WebAssembly Package Manager (wapm.io) - wapm://
+// * NPN - npm:// (powered by unpkg.com)

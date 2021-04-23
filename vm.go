@@ -24,11 +24,27 @@ var (
 )
 
 type Module struct {
+	vm *VM
+
 	id         string
 	definition types.ResolvedModule
 
+	dependancies map[string]*Module
+	exportArgs   map[string]*json.RawMessage
+	// lenses       map[string]*Module
+
 	wmod  *wasmer.Module
 	winst *wasmer.Instance
+}
+
+// setModuleImport sets the import entire module on the global VM scope
+func (mod *Module) setModuleImport(name string, target *Module) {
+	mod.vm.setModuleImport(name, target)
+}
+
+// setLensImport sets the individual lens functions on the module scope
+func (mod *Module) setLensImport(name string, target *Module) {
+	mod.dependancies[name] = target
 }
 
 type Options struct {
@@ -43,6 +59,11 @@ type Options struct {
 type ContextValueOptions struct {
 	Resolver  map[interface{}]interface{}
 	Execution map[interface{}]interface{}
+}
+
+type importSetter interface {
+	setModuleImport(name string, mod *Module)
+	setLensImport(name string, mod *Module)
 }
 
 // VM is the runtime virtual machine for
@@ -146,7 +167,7 @@ func (vm *VM) resolveLens(ctx context.Context, lens types.LensFile) error {
 			continue
 		}
 
-		if err := vm.addModuleImportReference(name, resolvedMod); err != nil {
+		if _, err, _ := vm.addGlobalImport(name, resolvedMod); err != nil {
 			return err
 		}
 	}
@@ -163,8 +184,14 @@ vm.AddModule(lensvm.ModuleIPFSLoader("ipfs://"))
 // ImportModule will add the module file found
 // when resolving the given path. It then adds all the
 // defined lens modules in the module file.
-func (vm *VM) ImportModule(path string) error {
-	return nil
+func (vm *VM) ImportModule(path string) (*Module, error) {
+	rmod, err := vm.ResolveModule(path)
+	if err != nil {
+		return nil, err
+	}
+
+	mod, err, _ := vm.addGlobalImport("*", rmod)
+	return mod, err
 }
 
 // ImportModuleFunction will resolve the module from the
@@ -173,40 +200,70 @@ func (vm *VM) ImportModule(path string) error {
 // it will scan all of them until it finds a match. If
 // the module only defines a single module definition, it
 // will import it if theres a name match.
-func (vm *VM) ImportModuleFunction(name, path string) error {
-	rmod, err := vm.ResolveModule(path)
-	if err != nil {
-		return err
+func (vm *VM) ImportModuleFunction(name, path string) (*Module, error) {
+	// if we're importing all the module functions, use the correct
+	// function
+	if name == "*" {
+		return vm.ImportModule(path)
 	}
 
-	return vm.addModuleImportReference(name, rmod)
+	rmod, err := vm.ResolveModule(path)
+	if err != nil {
+		return nil, err
+	}
+
+	mod, err, _ := vm.addGlobalImport(name, rmod)
+	return mod, err
 }
 
 // func (vm) ResolveContext()
 
-func (vm *VM) addModuleImportReference(name string, rmod types.ResolvedModule) error {
+// addGlobalImport adds the refenced lens function from the given ResolvedModule
+// to the global (vm) scope.
+func (vm *VM) addGlobalImport(name string, rmod types.ResolvedModule) (*Module, error, bool) {
+	return vm.addScopedImport(vm, "*", rmod)
+}
+
+// addScopedImport adds the referenced lens function from the given ResolvedModule
+// to the supplied scope, can be either global (vm) or local (module).
+// Recursively add all the necessary depenencies.
+func (vm *VM) addScopedImport(scope importSetter, name string, rmod types.ResolvedModule) (*Module, error, bool) {
 	if len(name) == 0 {
-		return errors.New("Missing name of import function")
+		return nil, errors.New("Missing name of import function"), false
 	}
 	if len(rmod.ID) == 0 {
-		return errors.New("Invalud resolved module object. Missing ID")
+		return nil, errors.New("Invalid resolved module object. Missing ID"), false
 	}
 	if mod, exists := vm.moduleImports[rmod.ID]; exists {
-		if moduleHasLensFunc(rmod, name) {
-			vm.lensImports[name] = mod
-			return nil
+		if name == "*" {
+			for _, export := range rmod.Exports {
+				scope.setLensImport(export.Name, mod)
+			}
+		} else {
+			if moduleHasLensFunc(rmod, name) {
+				scope.setLensImport(name, mod)
+				return mod, nil, false
+			}
+			return nil, fmt.Errorf("Lens function '%s' is missing from module", name), false
 		}
-		return fmt.Errorf("Lens function '%s' is missing from module", name)
 	}
 
 	mod, err := vm.newModule(rmod)
 	if err != nil {
-		return err
+		return nil, err, false
 	}
 
-	vm.moduleImports[mod.id] = mod
-	vm.lensImports[name] = mod
-	return nil
+	scope.setModuleImport(mod.id, mod)
+	scope.setLensImport(name, mod)
+
+	// loop and add all the modules' dependencies on this scope
+	// recursively
+	for k, v := range rmod.Imports {
+		if _, err, _ := vm.addScopedImport(mod, k, v.Module); err != nil {
+			return mod, err, false
+		}
+	}
+	return mod, nil, true
 }
 
 // func (vm *VM) HasImport
@@ -217,20 +274,28 @@ func (vm *VM) addModuleImportReference(name string, rmod types.ResolvedModule) e
 
 func (vm *VM) newModule(rmod types.ResolvedModule) (*Module, error) {
 	// check ID and PackageBytes
-	if rmod.ID == "" || len(rmod.PackageBytes) == 0 {
-		return nil, errors.New("Invalid resolved module object. Missing ID or PackageBytes")
+	if rmod.ID == "" {
+		return nil, errors.New("Invalid resolved module object. Missing ID")
 	}
-	mod := &Module{
-		id:         rmod.ID,
-		definition: rmod,
+	if len(rmod.PackageBytes) == 0 {
+		return nil, errors.New("Missing module wasm bytes")
+	}
+	exports := make(map[string]*json.RawMessage)
+	for _, e := range rmod.Exports {
+		exports[e.Name] = e.Arguments
 	}
 
 	wmod, err := wasmer.NewModule(vm.wstore, rmod.PackageBytes)
 	if err != nil {
 		return nil, err
 	}
-	mod.wmod = wmod
-	return mod, nil
+	return &Module{
+		vm:         vm,
+		id:         rmod.ID,
+		definition: rmod,
+		exportArgs: exports,
+		wmod:       wmod,
+	}, nil
 }
 
 func (vm *VM) ResolveModule(path string) (types.ResolvedModule, error) {
@@ -269,52 +334,41 @@ func (vm *VM) resolveModule(ctx context.Context, foundModules map[string]bool, p
 	}
 
 	//validate ModuleFile
-	if modFile.Name != "" && len(modFile.Modules) > 0 {
-		return types.ResolvedModule{}, fmt.Errorf("Resolved module at path %s connot have a single module and a 'modules' array", path), false
+	if len(modFile.Exports) == 0 {
+		return types.ResolvedModule{}, fmt.Errorf("Resolved module at path %s does not export any lens functions", path), false
 	}
 
-	var rMods []types.ResolvedModule
 	// flatten the original modFile into a array.
 	// It either contains the original modFile.Modules array
 	// or an array of length 1, which is the root module in the
 	// modFile
-	if len(modFile.Modules) == 0 {
-		modFile.Modules = append(modFile.Modules, modFile)
-	}
-	for _, f := range modFile.Modules {
-		m := types.ModuleToResolvedModule(f)
-		for n, p := range f.Import {
-			// impModule := types.ImportedModule{Path: p}
-			mod, err, _ := vm.resolveModule(ctx, foundModules, p)
-			if err != nil {
-				return types.ResolvedModule{}, err, false
-			}
-			m.Import[n] = types.ImportedModule{
-				Path:   p,
-				Module: mod,
-			}
-		}
+	root := types.ModuleToResolvedModule(modFile)
+	root.ID = path
 
-		wasmBytes, err := vm.resolve(ctx, f.Package)
+	for n, p := range modFile.Import {
+		// impModule := types.ImportedModule{Path: p}
+		mod, err, _ := vm.resolveModule(ctx, foundModules, p)
 		if err != nil {
 			return types.ResolvedModule{}, err, false
 		}
-		m.PackageBytes = wasmBytes
-		m.ID = path
-
-		rMods = append(rMods, m)
+		root.Imports[n] = types.ImportedModule{
+			Path:   p,
+			Module: mod,
+		}
 	}
 
-	// return either a root resolved module
-	// or a resolved module with an array
-	// of sub resolved modules
-	if len(rMods) == 1 {
-		return rMods[0], nil, true
+	wasmBytes, err := vm.resolve(ctx, modFile.Package)
+	if err != nil {
+		return types.ResolvedModule{}, err, false
 	}
-	// @todo: Should we add the extra resolver meta-data here?
-	return types.ResolvedModule{
-		Modules: rMods,
-	}, nil, true
+	root.PackageBytes = wasmBytes
+	root.ID = path
+
+	return root, nil, true
+	// return types.ResolvedModule{
+	// 	ID:      path,
+	// 	Modules: rMods,
+	// }, nil, true
 }
 
 func (vm *VM) resolve(ctx context.Context, path string) ([]byte, error) {
@@ -334,6 +388,14 @@ func (vm *VM) resolve(ctx context.Context, path string) ([]byte, error) {
 	return resolver.Resolve(ctx, parts[1])
 }
 
+func (vm *VM) setModuleImport(name string, target *Module) {
+	vm.moduleImports[name] = target
+}
+
+func (vm *VM) setLensImport(name string, target *Module) {
+	vm.lensImports[name] = target
+}
+
 func hash256(buf []byte) string {
 	h := sha256.New()
 	h.Write(buf)
@@ -349,8 +411,8 @@ func moduleHasLensFunc(rmod types.ResolvedModule, name string) bool {
 		return true
 	}
 
-	for _, mod := range rmod.Modules {
-		if name == mod.Name {
+	for _, exp := range rmod.Exports {
+		if name == exp.Name {
 			return true
 		}
 	}
@@ -359,5 +421,5 @@ func moduleHasLensFunc(rmod types.ResolvedModule, name string) bool {
 }
 
 func isEmptyResolvedModule(mod types.ResolvedModule) bool {
-	return (mod.Name == "" && len(mod.Modules) == 0)
+	return (mod.Name == "" && len(mod.Exports) == 0)
 }

@@ -3,7 +3,7 @@
     "runtime": "wasm",
     "language": "go",
 
-    "modules": [
+    "exports": [
         {
             "name": "rename1",
             "description": "Rename a field from source to destination",
@@ -20,9 +20,7 @@
                         "type": "string"
                     }
                 }
-            },
-            
-            "module": "file://testdata/multi/main1.wasm"
+            }
         },
         {
             "name": "rename2",
@@ -40,9 +38,9 @@
                         "type": "string"
                     }
                 }
-            },
-            
-            "module": "file://testdata/multi/main2.wasm"
+            }
         }
-    ]
+    ],
+
+    "package": "file://testdata/multi/main1.wasm"
 }

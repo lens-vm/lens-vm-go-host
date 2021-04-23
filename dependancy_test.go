@@ -35,17 +35,17 @@ func TestMultiResolveModule(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Empty(t, mod.Name)
-	assert.Len(t, mod.Modules, 2)
+	assert.Len(t, mod.Exports, 2)
 
 	buf, err := ioutil.ReadFile("testdata/multi/main1.wasm")
 	if err != nil {
 		panic(err)
 	}
 
-	assert.Equal(t, buf, mod.Modules[0].PackageBytes)
+	assert.Equal(t, buf, mod.PackageBytes)
 }
 
-func TestImportResolveModule(t *testing.T) {
+func TestImportSimpleResolveModule(t *testing.T) {
 	vm := NewVM(nil)
 	assert.NotNil(t, vm)
 
@@ -53,9 +53,9 @@ func TestImportResolveModule(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "extract", mod.Name)
-	assert.Len(t, mod.Import, 1)
+	assert.Len(t, mod.Imports, 1)
 
-	renameMod, ok := mod.Import["rename"]
+	renameMod, ok := mod.Imports["rename"]
 	assert.True(t, ok)
 	assert.Equal(t, "rename", renameMod.Module.Name)
 }
@@ -68,17 +68,27 @@ func TestImportDeepResolveModule(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "copy", mod.Name)
-	assert.Len(t, mod.Import, 2)
+	assert.Len(t, mod.Imports, 2)
 
-	assert.Equal(t, "rename", mod.Import["rename"].Module.Name)
-	assert.Equal(t, "file://testdata/simple/module.json", mod.Import["extract"].Module.Import["rename"].Path)
+	assert.Equal(t, "rename", mod.Imports["rename"].Module.Name)
+	assert.Equal(t, "file://testdata/simple/module.json", mod.Imports["extract"].Module.Imports["rename"].Path)
 }
 
-func TestSimpleAddModule(t *testing.T) {
+func TestSimpleImportFunction(t *testing.T) {
 	vm := NewVM(nil)
 	assert.NotNil(t, vm)
 
-	err := vm.ImportModuleFunction("rename", "file://testdata/simple/module.json")
+	_, err := vm.ImportModuleFunction("rename", "file://testdata/simple/module.json")
+	assert.NoError(t, err)
+
+	assert.Len(t, vm.moduleImports, 1)
+}
+
+func TestMultiImportFunction(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	_, err := vm.ImportModuleFunction("rename", "file://testdata/multi/module.json")
 	assert.NoError(t, err)
 
 	assert.Len(t, vm.moduleImports, 1)

@@ -2,21 +2,26 @@
     "name": "rename",
     "description": "Rename a field from source to destination",
     
-    "arguments": {
-        "type": "object",
-        "properties": {
-            "source": {
-                "description": "The source field for renaming",
-                "type": "string"
-            },
-            "destination": {
-                "description": "The destination field for renaming",
-                "type": "string"
+    "exports": [
+        {
+            "name": "rename",
+            "arguments": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "description": "The source field for renaming",
+                        "type": "string"
+                    },
+                    "destination": {
+                        "description": "The destination field for renaming",
+                        "type": "string"
+                    }
+                }
             }
         }
-    },
+    ],
     
     "runtime": "wasm",
     "language": "go",
-    "module": "file://testdata/simple/main.wasm"
+    "package": "file://testdata/simple/main.wasm"
 }

@@ -7,21 +7,27 @@
         "extract": "file://testdata/importsimple/module.json"
     },
     
-    "arguments": {
-        "type": "object",
-        "properties": {
-            "source": {
-                "description": "The source field for renaming",
-                "type": "string"
-            },
-            "destination": {
-                "description": "The source field for renaming",
-                "type": "string"
+    "exports": [
+        {
+            "name": "copy",
+            "arguments": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "description": "The source field for renaming",
+                        "type": "string"
+                    },
+                    "destination": {
+                        "description": "The source field for renaming",
+                        "type": "string"
+                    }
+                }
             }
         }
-    },
+    ],
+
     
     "runtime": "wasm",
     "language": "go",
-    "module": "file://testdata/simple/main.wasm"
+    "package": "file://testdata/simple/main.wasm"
 }

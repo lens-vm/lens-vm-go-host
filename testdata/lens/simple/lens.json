@@ -1,0 +1,14 @@
+{
+    "import": {
+        "rename": "file://testdata/simple/module.json"
+    },
+
+    "lenses": [
+        {
+            "rename": {
+                "source": "body",
+                "destination": "description"
+            }
+        }
+    ]
+}

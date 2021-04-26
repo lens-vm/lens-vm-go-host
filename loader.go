@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/lens-vm/lens-vm-go-host/resolvers"
+	"github.com/lens-vm/lens-vm-go-host/resolvers/file"
 	"github.com/lens-vm/lens-vm-go-host/types"
 )
 
@@ -42,7 +43,8 @@ type lensFileLoader struct {
 func LensFileLoader(path string) LensLoader {
 	return lensFileLoader{
 		genericLoader{
-			path: path,
+			resolver: file.FileResolver{},
+			path:     path,
 		},
 	}
 }

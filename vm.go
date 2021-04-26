@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/wasmerio/wasmer-go/wasmer"
@@ -89,7 +90,7 @@ type VM struct {
 	resolverCtx context.Context
 	execCtx     context.Context
 
-	dgraph dependancyGraph
+	dgraph *dependancyGraph
 
 	initialized bool
 }
@@ -142,7 +143,8 @@ func (vm *VM) LoadLens(l LensLoader) error {
 // lens file object. It creates the underlying WASM module
 // instances, and dynamically links all dependancies
 func (vm *VM) Init() error {
-	return nil
+	err := vm.makeDependancyGraph()
+	return err
 }
 
 // Exec does the actual lens execution and transformation
@@ -232,6 +234,7 @@ func (vm *VM) addScopedImport(scope importSetter, name string, rmod types.Resolv
 		return nil, errors.New("Missing name of import function"), false
 	}
 	if len(rmod.ID) == 0 {
+		fmt.Println(rmod)
 		return nil, errors.New("Invalid resolved module object. Missing ID"), false
 	}
 	if mod, exists := vm.moduleImports[rmod.ID]; exists {
@@ -259,6 +262,10 @@ func (vm *VM) addScopedImport(scope importSetter, name string, rmod types.Resolv
 	// loop and add all the modules' dependencies on this scope
 	// recursively
 	for k, v := range rmod.Imports {
+		// check if empty
+		if reflect.DeepEqual(types.ResolvedModule{}, v.Module) {
+			continue
+		}
 		if _, err, _ := vm.addScopedImport(mod, k, v.Module); err != nil {
 			return mod, err, false
 		}
@@ -290,11 +297,12 @@ func (vm *VM) newModule(rmod types.ResolvedModule) (*Module, error) {
 		return nil, err
 	}
 	return &Module{
-		vm:         vm,
-		id:         rmod.ID,
-		definition: rmod,
-		exportArgs: exports,
-		wmod:       wmod,
+		vm:           vm,
+		id:           rmod.ID,
+		definition:   rmod,
+		dependancies: make(map[string]*Module),
+		exportArgs:   exports,
+		wmod:         wmod,
 	}, nil
 }
 

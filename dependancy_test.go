@@ -94,6 +94,27 @@ func TestMultiImportFunction(t *testing.T) {
 	assert.Len(t, vm.moduleImports, 1)
 }
 
+func TestDeepImportFunction(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	_, err := vm.ImportModuleFunction("rename", "file://testdata/importdeep/module.json")
+	assert.NoError(t, err)
+
+	assert.Len(t, vm.moduleImports, 3, "stuff")
+}
+
+func TestSimpleLens(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	err := vm.LoadLens(LensFileLoader("file://testdata/lens/simple/lens.json"))
+	assert.NoError(t, err)
+
+	assert.Len(t, vm.moduleImports, 1)
+	assert.Len(t, vm.lensImports, 1)
+}
+
 /*
 vm := lensvm.NewVM(nil)
 vm.LoadLens("...")

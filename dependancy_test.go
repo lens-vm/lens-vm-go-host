@@ -1,6 +1,7 @@
 package lensvm
 
 import (
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -113,6 +114,68 @@ func TestSimpleLens(t *testing.T) {
 
 	assert.Len(t, vm.moduleImports, 1)
 	assert.Len(t, vm.lensImports, 1)
+}
+
+func TestDeepLens(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	err := vm.LoadLens(LensFileLoader("file://testdata/lens/importdeep/lens.json"))
+	assert.NoError(t, err)
+
+	assert.Len(t, vm.moduleImports, 3)
+	fmt.Println(vm.lensImports)
+	assert.Len(t, vm.lensImports, 1)
+}
+
+func TestGraphSortSimple(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	err := vm.LoadLens(LensFileLoader("file://testdata/lens/simple/lens.json"))
+	assert.NoError(t, err)
+
+	err = vm.makeDependancyGraph()
+	assert.NoError(t, err)
+
+	var i string
+	// grab the first import path
+	for _, v := range vm.lensFile.Import {
+		i = v
+		break
+	}
+	deps, err := vm.dgraph.SortOrder(i)
+	assert.NoError(t, err)
+
+	assert.Len(t, deps, 1)
+	assert.Equal(t, "file://testdata/simple/module.json", deps[0])
+}
+
+func TestGraphSortDeep(t *testing.T) {
+	vm := NewVM(nil)
+	assert.NotNil(t, vm)
+
+	err := vm.LoadLens(LensFileLoader("file://testdata/lens/importdeep/lens.json"))
+	assert.NoError(t, err)
+
+	err = vm.makeDependancyGraph()
+	assert.NoError(t, err)
+
+	var i string
+	// grab the first import path
+	for _, v := range vm.lensFile.Import {
+		i = v
+		break
+	}
+	deps, err := vm.dgraph.SortOrder(i)
+	assert.NoError(t, err)
+
+	assert.Len(t, deps, 3)
+	assert.Equal(t, []string{
+		"file://testdata/simple/module.json",
+		"file://testdata/importsimple/module.json",
+		"file://testdata/importdeep/module.json"},
+		deps)
 }
 
 /*

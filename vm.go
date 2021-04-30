@@ -9,11 +9,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/wasmerio/wasmer-go/wasmer"
-
 	"github.com/lens-vm/lens-vm-go-host/resolvers"
 	"github.com/lens-vm/lens-vm-go-host/resolvers/file"
 	"github.com/lens-vm/lens-vm-go-host/types"
+
+	"github.com/wasmerio/wasmer-go/wasmer"
 )
 
 var (
@@ -34,8 +34,11 @@ type Module struct {
 	exportArgs   map[string]*json.RawMessage
 	// lenses       map[string]*Module
 
-	wmod  *wasmer.Module
-	winst *wasmer.Instance
+	importObject *wasmer.ImportObject
+	wmod         *wasmer.Module
+	winst        *wasmer.Instance
+
+	initialized bool
 }
 
 // setModuleImport sets the import entire module on the global VM scope
@@ -92,6 +95,8 @@ type VM struct {
 
 	dgraph *dependancyGraph
 
+	buffers map[types.BufferType][]byte
+
 	initialized bool
 }
 
@@ -144,7 +149,32 @@ func (vm *VM) LoadLens(l LensLoader) error {
 // instances, and dynamically links all dependancies
 func (vm *VM) Init() error {
 	err := vm.makeDependancyGraph()
-	return err
+	var root string
+	// grab any import path from our lens file
+	for _, mod := range vm.lensImports {
+		root = mod.id
+		break
+	}
+	deps, err := vm.dgraph.SortOrder(root)
+	if err != nil {
+		return err
+	}
+
+	for _, dep := range deps {
+		mod, ok := vm.moduleImports[dep]
+		if !ok {
+			return fmt.Errorf("Missing module dependancy: %s", dep)
+		}
+		if err := vm.moduleInit(mod); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (vm *VM) moduleInit(mod *Module) error {
+
 }
 
 // Exec does the actual lens execution and transformation
@@ -223,7 +253,7 @@ func (vm *VM) ImportModuleFunction(name, path string) (*Module, error) {
 // addGlobalImport adds the refenced lens function from the given ResolvedModule
 // to the global (vm) scope.
 func (vm *VM) addGlobalImport(name string, rmod types.ResolvedModule) (*Module, error, bool) {
-	return vm.addScopedImport(vm, "*", rmod)
+	return vm.addScopedImport(vm, name, rmod)
 }
 
 // addScopedImport adds the referenced lens function from the given ResolvedModule

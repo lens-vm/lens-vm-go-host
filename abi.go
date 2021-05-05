@@ -28,9 +28,11 @@ var (
 
 // }
 
-func (vm *VM) getBuffer(bufferType int32, start int32, maxsize int32, retData int32, retSize int32) types.Status
+func (vm *VM) GetBuffer(bufferType types.BufferType) []byte
 
-func (vm *VM) setBuffer(t types.BufferType, start, maxsize int32, ptr *byte, size int32) types.Status
+func (vm *VM) lensVMGetBufferBytes(bufferType, start, maxsize, retData, retSize int32) int32
+
+func (vm *VM) lensVMSetBufferBytes(bufferType, start, maxsize, ptr, size int32) int32
 
 func (m *Module) RegisterFunc(namespace string, funcName string, f interface{}) error {
 
@@ -53,9 +55,9 @@ func (m *Module) RegisterFunc(namespace string, funcName string, f interface{}) 
 		return ErrRegisterArgNum
 	}
 
-	argsKind := make([]*wasmer.ValueType, argsNum-1)
-	for i := 1; i < argsNum; i++ {
-		argsKind[i-1] = convertFromGoType(funcType.In(i))
+	argsKind := make([]*wasmer.ValueType, argsNum)
+	for i := 0; i < argsNum; i++ {
+		argsKind[i] = convertFromGoType(funcType.In(i))
 	}
 
 	retsNum := funcType.NumOut()
@@ -83,9 +85,12 @@ func (m *Module) RegisterFunc(namespace string, funcName string, f interface{}) 
 
 			callResult := reflect.ValueOf(f).Call(aa)
 
-			ret := convertFromGoValue(callResult[0])
+			var ret []wasmer.Value
+			if len(callResult) > 0 {
+				ret = []wasmer.Value{convertFromGoValue(callResult[0])}
+			}
 
-			return []wasmer.Value{ret}, nil
+			return ret, nil
 		},
 	)
 

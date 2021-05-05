@@ -12,6 +12,7 @@ import (
 	"github.com/lens-vm/lens-vm-go-host/resolvers"
 	"github.com/lens-vm/lens-vm-go-host/resolvers/file"
 	"github.com/lens-vm/lens-vm-go-host/types"
+	stypes "github.com/lens-vm/lens-vm-go-sdk/types"
 
 	"github.com/wasmerio/wasmer-go/wasmer"
 )
@@ -87,6 +88,7 @@ type VM struct {
 
 	wengine *wasmer.Engine
 	wstore  *wasmer.Store
+	wasiEnv *wasmer.WasiEnvironment
 
 	resolvers map[string]resolvers.Resolver
 
@@ -95,7 +97,7 @@ type VM struct {
 
 	dgraph *dependancyGraph
 
-	buffers map[types.BufferType][]byte
+	buffers map[stypes.BufferType][]byte
 
 	initialized bool
 }
@@ -106,9 +108,14 @@ func NewVM(opt *Options) *VM {
 	}
 	wengine := wasmer.NewEngine()
 	wstore := wasmer.NewStore(wengine)
+	env, err := wasmer.NewWasiStateBuilder("lensvm-go-host").Finalize()
+	if err != nil {
+		panic(err)
+	}
 	vm := &VM{
 		wengine:       wengine,
 		wstore:        wstore,
+		wasiEnv:       env,
 		moduleImports: make(map[string]*Module),
 		lensImports:   make(map[string]*Module),
 		resolvers:     make(map[string]resolvers.Resolver),
@@ -174,6 +181,18 @@ func (vm *VM) Init() error {
 }
 
 func (vm *VM) moduleInit(mod *Module) error {
+	importObj, err := vm.wasiEnv.GenerateImportObject(vm.wstore, mod.wmod)
+	if err != nil {
+		return nil
+	}
+
+	mod.importObject = importObj
+	if err := mod.RegisterFunc("env", "lensvm_get_buffer", vm.lensVMGetBufferBytes); err != nil {
+		return nil
+	}
+	if err := mod.RegisterFunc("env", "lensvm_set_buffer", vm.lensVMSetBufferBytes); err != nil {
+		return nil
+	}
 
 }
 

@@ -28,11 +28,21 @@ var (
 
 // }
 
-func (vm *VM) GetBuffer(bufferType types.BufferType) []byte
+func (vm *VM) GetBuffer(bufferType types.BufferType) []byte {
+	return nil
+}
 
-func (vm *VM) lensVMGetBufferBytes(bufferType, start, maxsize, retData, retSize int32) int32
+func (vm *VM) SetBuffer(bufferType types.BufferType, data []byte) error {
+	return nil
+}
 
-func (vm *VM) lensVMSetBufferBytes(bufferType, start, maxsize, ptr, size int32) int32
+func (vm *VM) lensVMGetBufferBytes(bufferType, start, maxsize, retData, retSize int32) int32 {
+	return 0
+}
+
+func (vm *VM) lensVMSetBufferBytes(bufferType, start, maxsize, ptr, size int32) int32 {
+	return 0
+}
 
 func (m *Module) RegisterFunc(namespace string, funcName string, f interface{}) error {
 

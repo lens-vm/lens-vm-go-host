@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/davecgh/go-spew v1.1.0
 	github.com/lens-vm/gogl v0.4.0
+	github.com/lens-vm/lens-vm-go-sdk v0.0.0-20210330121507-dd4f625c0bac
 	github.com/stretchr/testify v1.7.0
 	github.com/wasmerio/wasmer-go v1.0.3
 	gopkg.in/fatih/set.v0 v0.2.1 // indirect

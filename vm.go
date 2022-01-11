@@ -158,6 +158,9 @@ func (vm *VM) Init() error {
 	err := vm.makeDependancyGraph()
 	var root string
 	// grab any import path from our lens file
+	// note: range over a map has an undefined
+	// order, so effectively we get a random
+	// element from the map here.
 	for _, mod := range vm.lensImports {
 		root = mod.id
 		break
@@ -180,6 +183,9 @@ func (vm *VM) Init() error {
 	return nil
 }
 
+// moduleInit initalizes the WASM module, including wiring all the
+// depedant imports from both the VM host functions, and the dependancy
+// module functions.
 func (vm *VM) moduleInit(mod *Module) error {
 	importObj, err := vm.wasiEnv.GenerateImportObject(vm.wstore, mod.wmod)
 	if err != nil {
@@ -194,6 +200,33 @@ func (vm *VM) moduleInit(mod *Module) error {
 		return nil
 	}
 
+	// loop through the dependencies, and wire the exports/imports
+	for lens, m := range mod.dependancies {
+		// get the export from the dependancy
+		fnName := formatExecName(lens)
+		fn, err := m.winst.Exports.Get(fnName)
+		if err != nil {
+			return err
+		}
+
+		// add it to the importobject of the current module
+		mod.importObject.Register("env", map[string]wasmer.IntoExtern{
+			fnName: fn,
+		})
+	}
+
+	// create new wasm instance
+	inst, err := wasmer.NewInstance(mod.wmod, mod.importObject)
+	if err != nil {
+		return err
+	}
+	mod.winst = inst
+
+	return nil
+}
+
+func formatExecName(name string) string {
+	return fmt.Sprintf("lensvm_%s_exec", name)
 }
 
 // Exec does the actual lens execution and transformation
